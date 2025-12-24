@@ -1,0 +1,142 @@
+import imageCompression from 'browser-image-compression';
+
+export interface CompressionOptions {
+  quality: number; // 0-1
+  maxWidth?: number;
+  maxHeight?: number;
+}
+
+export interface CompressionResult {
+  file: File;
+  originalSize: number;
+  compressedSize: number;
+  compressionRatio: number;
+  url: string;
+}
+
+// export async function compressImage(file: File, options: CompressionOptions): Promise<CompressionResult> {
+//   const originalSize = file.size
+
+//   return new Promise((resolve, reject) => {
+//     const reader = new FileReader()
+//     reader.readAsDataURL(file)
+//     reader.onload = (e) => {
+//       const img = new Image()
+//       img.src = e.target?.result as string
+//       img.onload = () => {
+//         const canvas = document.createElement("canvas")
+//         let { width, height } = img
+
+//         // Apply max dimensions if specified
+//         if (options.maxWidth && width > options.maxWidth) {
+//           height = (height * options.maxWidth) / width
+//           width = options.maxWidth
+//         }
+//         if (options.maxHeight && height > options.maxHeight) {
+//           width = (width * options.maxHeight) / height
+//           height = options.maxHeight
+//         }
+
+//         canvas.width = width
+//         canvas.height = height
+
+//         const ctx = canvas.getContext("2d")
+//         if (!ctx) {
+//           reject(new Error("Could not get canvas context"))
+//           return
+//         }
+
+//         ctx.drawImage(img, 0, 0, width, height)
+
+//         canvas.toBlob(
+//           (blob) => {
+//             if (!blob) {
+//               reject(new Error("Compression failed"))
+//               return
+//             }
+
+//             const compressedFile = new File([blob], file.name, {
+//               type: file.type,
+//               lastModified: Date.now(),
+//             })
+
+//             resolve({
+//               file: compressedFile,
+//               originalSize,
+//               compressedSize: blob.size,
+//               compressionRatio: Math.round((1 - blob.size / originalSize) * 100),
+//               url: canvas.toDataURL(file.type, options.quality),
+//             })
+//           },
+//           file.type,
+//           options.quality,
+//         )
+//       }
+//       img.onerror = () => reject(new Error("Failed to load image"))
+//     }
+//     reader.onerror = () => reject(new Error("Failed to read file"))
+//   })
+// }
+
+export async function compressImage(file: File, options: CompressionOptions) {
+  const originalSize = file.size;
+  console.log("originalSize" , originalSize);
+  try {
+    const options = {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+    };
+    const compressedFile = await imageCompression(file, options);
+    console.log("compressedFile" , compressedFile);
+  } catch (error) {
+    console.log("error while compressing image");
+  }
+}
+
+export async function compressVideo(
+  file: File,
+  options: CompressionOptions,
+  onProgress?: (progress: number) => void
+): Promise<CompressionResult> {
+  // For client-side video compression, we use a simplified approach
+  // In production, you'd want to use FFmpeg.wasm or a server-side solution
+  const originalSize = file.size;
+  const url = URL.createObjectURL(file);
+
+  // Simulate compression progress
+  if (onProgress) {
+    for (let i = 0; i <= 100; i += 10) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      onProgress(i);
+    }
+  }
+
+  // Note: Actual video compression would require FFmpeg.wasm
+  // For now, we return the original file as a placeholder
+  return {
+    file,
+    originalSize,
+    compressedSize: Math.round(originalSize * (1 - options.quality * 0.3)),
+    compressionRatio: Math.round(options.quality * 30),
+    url,
+  };
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${
+    sizes[i]
+  }`;
+}
+
+export function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/");
+}
+
+export function isVideoFile(file: File): boolean {
+  return file.type.startsWith("video/");
+}
