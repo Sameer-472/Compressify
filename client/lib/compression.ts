@@ -1,9 +1,9 @@
-import imageCompression from 'browser-image-compression';
+import imageCompression from "browser-image-compression";
 
 export interface CompressionOptions {
-  quality: number; // 0-1
-  maxWidth?: number;
-  maxHeight?: number;
+  maxSizeMB: number;
+  maxWidthOrHeight?: number;
+  useWebWorker?: Boolean;
 }
 
 export interface CompressionResult {
@@ -78,19 +78,35 @@ export interface CompressionResult {
 //   })
 // }
 
-export async function compressImage(file: File, options: CompressionOptions) {
+export async function compressImage(
+  file: File,
+  options: CompressionOptions
+): Promise<CompressionResult> {
   const originalSize = file.size;
-  console.log("originalSize" , originalSize);
+  console.log("originalSize", originalSize);
+
   try {
-    const options = {
-      maxSizeMB: 1,
-      maxWidthOrHeight: 1920,
-      useWebWorker: true,
-    };
     const compressedFile = await imageCompression(file, options);
-    console.log("compressedFile" , compressedFile);
+    console.log("compressedFile", compressedFile);
+    // return compressedFile;
+    return {
+      file: compressedFile,
+      originalSize,
+      compressedSize: compressedFile.size,
+      compressionRatio: Math.floor(
+        ((originalSize - compressedFile.size) / originalSize) * 100
+      ),
+      url: "",
+    };
   } catch (error) {
     console.log("error while compressing image");
+    return {
+      file,
+      originalSize,
+      compressedSize: originalSize,
+      compressionRatio: 0,
+      url: "",
+    };
   }
 }
 

@@ -54,10 +54,11 @@ export default function Home() {
 
         if (isImageFile(fileStatus.file)) {
           result = await compressImage(fileStatus.file, {
-            quality: qualityValue,
-            maxWidth: 1920,
-            maxHeight: 1920,
-          })
+                maxSizeMB: 1,
+                maxWidthOrHeight: 1920,
+                useWebWorker: true,
+              })
+          console.log("result" , result)
           // Update immediately for images
           setFiles((prev) =>
             prev.map((f) => (f.id === fileStatus.id ? { ...f, result, isCompressing: false, progress: 100 } : f)),
@@ -78,8 +79,6 @@ export default function Home() {
 
     setIsProcessing(false)
   }
-
-  console.log("compressionResult files" , files);
 
   const handleUploadAll = () => {
     // Placeholder for actual upload logic
