@@ -1,5 +1,6 @@
 import imageCompression from "browser-image-compression";
-
+import {FFmpeg} from '@ffmpeg/ffmpeg';
+import {fetchFile} from '@ffmpeg/util'
 export interface CompressionOptions {
   maxSizeMB: number;
   maxWidthOrHeight?: number;
@@ -110,33 +111,58 @@ export async function compressImage(
   }
 }
 
-export async function compressVideo(
-  file: File,
-  options: CompressionOptions,
-  onProgress?: (progress: number) => void
-): Promise<CompressionResult> {
-  // For client-side video compression, we use a simplified approach
-  // In production, you'd want to use FFmpeg.wasm or a server-side solution
-  const originalSize = file.size;
-  const url = URL.createObjectURL(file);
+// export async function compressVideo(
+//   file: File,
+//   options: CompressionOptions,
+//   onProgress?: (progress: number) => void
+// ): Promise<CompressionResult> {
+//   // For client-side video compression, we use a simplified approach
+//   // In production, you'd want to use FFmpeg.wasm or a server-side solution
+//   const originalSize = file.size;
+//   const url = URL.createObjectURL(file);
 
-  // Simulate compression progress
-  if (onProgress) {
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      onProgress(i);
+//   // Simulate compression progress
+//   if (onProgress) {
+//     for (let i = 0; i <= 100; i += 10) {
+//       await new Promise((resolve) => setTimeout(resolve, 200));
+//       onProgress(i);
+//     }
+//   }
+
+//   // Note: Actual video compression would require FFmpeg.wasm
+//   // For now, we return the original file as a placeholder
+//   return {
+//     file,
+//     originalSize,
+//     compressedSize: Math.round(originalSize * (1 - options.quality * 0.3)),
+//     compressionRatio: Math.round(options.quality * 30),
+//     url,
+//   };
+// }
+
+
+const ffmpeg = new FFmpeg();
+export async function compressVideo(file: File){
+    if(!ffmpeg.loaded){
+      await ffmpeg.load({
+        coreURL: '/ffmpeg/ffmpeg-core.js',
+        wasmURL: '/ffmpeg/ffmpeg-core.wasm'
+      })
     }
-  }
 
-  // Note: Actual video compression would require FFmpeg.wasm
-  // For now, we return the original file as a placeholder
-  return {
-    file,
-    originalSize,
-    compressedSize: Math.round(originalSize * (1 - options.quality * 0.3)),
-    compressionRatio: Math.round(options.quality * 30),
-    url,
-  };
+    await ffmpeg.writeFile("input.mp4" , await fetchFile(file));
+
+    await ffmpeg.exec([
+      "-i", "input.mp4",
+      "-vcodec", "libx264",
+      "-preset", "fast",
+      "-crf", "26",
+      "output.mp4"
+    ]);
+
+    const data = await ffmpeg.readFile("output.mp4");
+
+    return new File([data.buffer] , "compressed.mp4" , {type: 'video/mp4'});
 }
 
 export function formatFileSize(bytes: number): string {
