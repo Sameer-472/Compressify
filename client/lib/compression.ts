@@ -142,6 +142,7 @@ export async function compressImage(
 
 
 const ffmpeg = new FFmpeg();
+
 export async function compressVideo(file: File){
     if(!ffmpeg.loaded){
       await ffmpeg.load({
@@ -162,7 +163,9 @@ export async function compressVideo(file: File){
 
     const data = await ffmpeg.readFile("output.mp4");
 
-    return new File([data.buffer] , "compressed.mp4" , {type: 'video/mp4'});
+    const result = new File([new Uint8Array(data as Uint8Array)] , "compressed.mp4" , {type: 'video/mp4'});
+    console.log("compress video result" , result);
+    return result
 }
 
 export function formatFileSize(bytes: number): string {
