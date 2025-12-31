@@ -88,25 +88,16 @@ export default function Home() {
           );
         } else if (isVideoFile(fileStatus.file)) {
           console.log("fileStatus.file", fileStatus.file);
-          // result = await compressVideo(
-          //   fileStatus.file,
-          //   { quality: qualityValue },
-          //   (progress) => {
-          //     setFiles((prev) =>
-          //       prev.map((f) =>
-          //         f.id === fileStatus.id ? { ...f, progress } : f
-          //       )
-          //     );
-          //   }
-          // );
           result = await compressVideo(fileStatus.file);
-          // setFiles((prev) =>
-          //   prev.map((f) =>
-          //     f.id === fileStatus.id
-          //       ? { ...f, result, isCompressing: false, progress: 100 }
-          //       : f
-          //   )
-          // );
+          console.log("Video compression result", result);
+          // Update status after video compression
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === fileStatus.id
+                ? { ...f, result, isCompressing: false, progress: 100 }
+                : f
+            )
+          );
         }
       } catch (error) {
         console.error("Compression error:", error);

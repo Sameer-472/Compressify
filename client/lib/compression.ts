@@ -1,6 +1,6 @@
+"use client";
+
 import imageCompression from "browser-image-compression";
-import {FFmpeg} from '@ffmpeg/ffmpeg';
-import {fetchFile} from '@ffmpeg/util'
 export interface CompressionOptions {
   maxSizeMB: number;
   maxWidthOrHeight?: number;
@@ -111,61 +111,146 @@ export async function compressImage(
   }
 }
 
-// export async function compressVideo(
-//   file: File,
-//   options: CompressionOptions,
-//   onProgress?: (progress: number) => void
-// ): Promise<CompressionResult> {
-//   // For client-side video compression, we use a simplified approach
-//   // In production, you'd want to use FFmpeg.wasm or a server-side solution
-//   const originalSize = file.size;
-//   const url = URL.createObjectURL(file);
+export async function compressVideo(file: File): Promise<CompressionResult> {
+  const originalSize = file.size;
 
-//   // Simulate compression progress
-//   if (onProgress) {
-//     for (let i = 0; i <= 100; i += 10) {
-//       await new Promise((resolve) => setTimeout(resolve, 200));
-//       onProgress(i);
-//     }
-//   }
+  try {
+    console.log(
+      "Starting video compression for:",
+      file.name,
+      "Size:",
+      originalSize
+    );
 
-//   // Note: Actual video compression would require FFmpeg.wasm
-//   // For now, we return the original file as a placeholder
-//   return {
-//     file,
-//     originalSize,
-//     compressedSize: Math.round(originalSize * (1 - options.quality * 0.3)),
-//     compressionRatio: Math.round(options.quality * 30),
-//     url,
-//   };
-// }
+    // Dynamically import FFmpeg to avoid "expression is too dynamic" error
+    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+    const { fetchFile } = await import("@ffmpeg/util");
 
+    // Create FFmpeg instance inside the function
+    const ffmpeg = new FFmpeg();
 
-const ffmpeg = new FFmpeg();
+    // Add logging for FFmpeg operations
+    ffmpeg.on("log", ({ message }) => {
+      console.log("FFmpeg log:", message);
+    });
 
-export async function compressVideo(file: File){
-    if(!ffmpeg.loaded){
+    // Use jsdelivr CDN for FFmpeg core files (more reliable)
+    // Using version 0.12.6 which is compatible with @ffmpeg/ffmpeg 0.12.x
+    const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
+
+    console.log("Loading FFmpeg core...");
+    if (!ffmpeg.loaded) {
       await ffmpeg.load({
-        coreURL: '/ffmpeg/ffmpeg-core.js',
-        wasmURL: '/ffmpeg/ffmpeg-core.wasm'
-      })
+        coreURL: `${baseURL}/ffmpeg-core.js`,
+        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+      });
+      console.log("FFmpeg core loaded successfully");
     }
 
-    await ffmpeg.writeFile("input.mp4" , await fetchFile(file));
+    // Get file extension
+    const fileExt = file.name.split(".").pop()?.toLowerCase() || "mp4";
+    const inputFileName = `input_${Date.now()}.${fileExt}`;
+    const outputFileName = `output_${Date.now()}.mp4`;
 
+    console.log("Writing input file:", inputFileName);
+    await ffmpeg.writeFile(inputFileName, await fetchFile(file));
+    console.log("Input file written");
+
+    // Execute compression with better settings
+    console.log("Starting FFmpeg compression...");
+    // await ffmpeg.exec([
+    //   "-i", inputFileName,
+    //    "-vf", "scale=1280:-2",
+    //   "-c:v", "libx264",
+    //   "-preset", "ultrafast",
+    //   "-crf", "30", // Higher CRF = more compression (18-28 is good range)
+    //   "-c:a", "aac",
+    //   "-b:a", "128k",
+    //   "-movflags", "+faststart",
+    //   outputFileName
+    // ]);
     await ffmpeg.exec([
-      "-i", "input.mp4",
-      "-vcodec", "libx264",
-      "-preset", "fast",
-      "-crf", "26",
-      "output.mp4"
+      "-i",
+      inputFileName,
+      "-vf",
+      "scale=1280:-2",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "30",
+      "-threads",
+      "1",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "96k",
+      "-movflags",
+      "+faststart",
+      outputFileName,
     ]);
+    console.log("FFmpeg compression completed");
 
-    const data = await ffmpeg.readFile("output.mp4");
+    // Read compressed file
+    console.log("Reading compressed file...");
+    const data = await ffmpeg.readFile(outputFileName);
+    console.log("Compressed file read, size:", data.length);
 
-    const result = new File([new Uint8Array(data as Uint8Array)] , "compressed.mp4" , {type: 'video/mp4'});
-    console.log("compress video result" , result);
-    return result
+    // Clean up files
+    try {
+      await ffmpeg.deleteFile(inputFileName);
+      await ffmpeg.deleteFile(outputFileName);
+    } catch (cleanupError) {
+      console.warn("Error cleaning up files:", cleanupError);
+    }
+
+    // Create compressed File object
+    const compressedFile = new File(
+      [new Uint8Array(data as Uint8Array)],
+      file.name.replace(/\.[^/.]+$/, "") + "_compressed.mp4",
+      { type: "video/mp4" }
+    );
+
+    const compressedSize = compressedFile.size;
+    const compressionRatio = Math.floor(
+      ((originalSize - compressedSize) / originalSize) * 100
+    );
+    const url = URL.createObjectURL(compressedFile);
+
+    const savedBytes = originalSize - compressedSize;
+    console.log("Video compression result:", {
+      originalSize: `${(originalSize / 1024 / 1024).toFixed(2)} MB`,
+      compressedSize: `${(compressedSize / 1024 / 1024).toFixed(2)} MB`,
+      compressionRatio: `${compressionRatio}%`,
+      saved: `${(savedBytes / 1024 / 1024).toFixed(2)} MB`,
+    });
+
+    return {
+      file: compressedFile,
+      originalSize,
+      compressedSize,
+      compressionRatio,
+      url,
+    };
+  } catch (error) {
+    console.error("Error compressing video:", error);
+    console.error("Error details:", {
+      name: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    // Return original file if compression fails
+    const url = URL.createObjectURL(file);
+    return {
+      file,
+      originalSize,
+      compressedSize: originalSize,
+      compressionRatio: 0,
+      url,
+    };
+  }
 }
 
 export function formatFileSize(bytes: number): string {
