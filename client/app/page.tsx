@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,7 +15,9 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { FileCard } from "@/components/file-card";
-import { Sparkles, Info, UploadIcon } from "lucide-react";
+import { LoginModal } from "@/components/login-modal";
+import { RegisterModal } from "@/components/register-modal";
+import { Sparkles, Info, UploadIcon, LogOut, User } from "lucide-react";
 import {
   compressImage,
   compressVideo,
@@ -37,8 +39,57 @@ export default function Home() {
   const [files, setFiles] = useState<FileWithStatus[]>([]);
   const [quality, setQuality] = useState([75]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = () => {
+      if (typeof window !== "undefined") {
+        const currentUser = localStorage.getItem("currentUser");
+        if (currentUser) {
+          try {
+            const user = JSON.parse(currentUser);
+            setIsAuthenticated(true);
+            setUserEmail(user.email);
+          } catch (error) {
+            console.error("Error parsing user data:", error);
+            localStorage.removeItem("currentUser");
+          }
+        }
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLoginSuccess = (email: string) => {
+    setIsAuthenticated(true);
+    setUserEmail(email);
+    setShowLoginModal(false);
+  };
+
+  const handleRegisterSuccess = (email: string) => {
+    setIsAuthenticated(true);
+    setUserEmail(email);
+    setShowRegisterModal(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("currentUser");
+    setIsAuthenticated(false);
+    setUserEmail(null);
+    setFiles([]);
+  };
 
   const handleFilesSelected = (newFiles: File[]) => {
+    // Check authentication before allowing file upload
+    // if (!isAuthenticated) {
+    //   setShowLoginModal(true);
+    //   return;
+    // }
+
     const filesWithStatus: FileWithStatus[] = newFiles.map((file) => ({
       file,
       id: `${file.name}-${Date.now()}-${Math.random()}`,
@@ -149,6 +200,38 @@ export default function Home() {
             Compress images and videos before uploading to save bandwidth and
             storage
           </p>
+          {/* Auth Status */}
+          <div className="mt-4 flex items-center justify-center gap-4">
+            {isAuthenticated ? (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full">
+                  <User className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-foreground">
+                    {userEmail}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLoginModal(true)}
+                className="gap-2"
+              >
+                <User className="w-4 h-4" />
+                Login
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-[1fr_320px] gap-6">
@@ -255,15 +338,29 @@ export default function Home() {
                   </Button>
 
                   {allCompressed && (
-                    <Button
-                      className="w-full bg-transparent"
-                      size="lg"
-                      variant="outline"
-                      onClick={handleUploadAll}
-                    >
-                      <UploadIcon className="w-4 h-4" />
-                      Upload to Server
-                    </Button>
+                    <>
+                      {isAuthenticated ? (
+                        <Button
+                          className="w-full bg-transparent"
+                          size="lg"
+                          variant="outline"
+                          onClick={handleUploadAll}
+                        >
+                          <UploadIcon className="w-4 h-4" />
+                          Upload to Server
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowLoginModal(true)}
+                          className="w-full bg-transparent"
+                        >
+                          <User className="w-4 h-4" />
+                          Login to Upload
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               </CardContent>
@@ -313,6 +410,28 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onLoginSuccess={handleLoginSuccess}
+        onSwitchToRegister={() => {
+          setShowLoginModal(false);
+          setShowRegisterModal(true);
+        }}
+      />
+
+      {/* Register Modal */}
+      <RegisterModal
+        isOpen={showRegisterModal}
+        onClose={() => setShowRegisterModal(false)}
+        onRegisterSuccess={handleRegisterSuccess}
+        onSwitchToLogin={() => {
+          setShowRegisterModal(false);
+          setShowLoginModal(true);
+        }}
+      />
     </div>
   );
 }
